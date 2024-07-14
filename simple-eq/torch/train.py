@@ -25,12 +25,44 @@ class SimpleCNN(nn.Module):
         self.dense = nn.Linear(in_features=16, out_features=10)
 
     def forward(self, x: torch.Tensor):
-        x = nn.functional.silu(self.cl1(x))
-        x = self.max_1(x)
-        x = nn.functional.silu(self.cl2(x))
-        x = self.max_2(x)
-        x = nn.functional.silu(self.cl3(x))
-        x = x.view(len(x), -1)
+        x_0 = x
+        x_90 = torch.rot90(x, k=1, dims=(2, 3))
+        x_180 = torch.rot90(x, k=2, dims=(2, 3))
+        x_270 = torch.rot90(x, k=3, dims=(2, 3))
+
+        x_0 = nn.functional.silu(self.cl1(x_0))
+        x_90 = nn.functional.silu(self.cl1(x_90))
+        x_180 = nn.functional.silu(self.cl1(x_180))
+        x_270 = nn.functional.silu(self.cl1(x_270))
+
+        x_0 = self.max_1(x_0)
+        x_90 = self.max_1(x_90)
+        x_180 = self.max_1(x_180)
+        x_270 = self.max_1(x_270)
+
+        x_0 = nn.functional.silu(self.cl2(x_0))
+        x_90 = nn.functional.silu(self.cl2(x_90))
+        x_180 = nn.functional.silu(self.cl2(x_180))
+        x_270 = nn.functional.silu(self.cl2(x_270))
+
+        x_0 = self.max_2(x_0)
+        x_90 = self.max_2(x_90)
+        x_180 = self.max_2(x_180)
+        x_270 = self.max_2(x_270)
+
+        x_0 = nn.functional.silu(self.cl3(x_0))
+        x_90 = nn.functional.silu(self.cl3(x_90))
+        x_180 = nn.functional.silu(self.cl3(x_180))
+        x_270 = nn.functional.silu(self.cl3(x_270))
+
+        x_0 = x_0.view(len(x_0), -1)
+        x_90 = x_90.view(len(x_90), -1)
+        x_180 = x_180.view(len(x_180), -1)
+        x_270 = x_270.view(len(x_270), -1)
+
+        x_all = torch.stack([x_0, x_90, x_180, x_270], dim=-1)  # (batch, 16, 4)
+        x = torch.max(x_all, dim=-1).values
+
         logits = self.dense(x)
         return logits
 
@@ -55,26 +87,6 @@ def train(dataloader, model, loss_fn, optimizer):
 
 
 # Test function
-def test(dataloader, model):
-    size = len(dataloader.dataset)
-    num_batches = len(dataloader)
-    model.eval()
-    test_loss, correct = 0, 0
-    loss_fn = nn.CrossEntropyLoss()
-    with torch.no_grad():
-        for X, y in dataloader:
-            pred = model(X)
-            test_loss += loss_fn(pred, y).item()
-            correct += (pred.argmax(1) == y).type(torch.float).sum().item()
-    test_loss /= num_batches
-    correct /= size
-    model.train()
-    print(
-        f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n"
-    )
-
-
-# Test function
 def test90(dataloader, model):
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
@@ -92,6 +104,26 @@ def test90(dataloader, model):
     model.train()
     print(
         f"Test 90rot Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n"
+    )
+
+
+def test(dataloader, model):
+    size = len(dataloader.dataset)
+    num_batches = len(dataloader)
+    model.eval()
+    test_loss, correct = 0, 0
+    loss_fn = nn.CrossEntropyLoss()
+    with torch.no_grad():
+        for X, y in dataloader:
+            X = torch.rot90(X, k=1, dims=(2, 3))
+            pred = model(X)
+            test_loss += loss_fn(pred, y).item()
+            correct += (pred.argmax(1) == y).type(torch.float).sum().item()
+    test_loss /= num_batches
+    correct /= size
+    model.train()
+    print(
+        f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n"
     )
 
 
