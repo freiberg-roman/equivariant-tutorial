@@ -1,6 +1,5 @@
 import jax
 import jax.numpy as jnp
-import numpy as np
 import optax
 import torchvision.datasets as datasets
 from flax import linen as nn

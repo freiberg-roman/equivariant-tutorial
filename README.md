@@ -9,6 +9,6 @@ podman/docker build --target simple-cnn-jax -t eq:simple-jax .
 ```
 Train and Evaluate using
 ```bash
-podman/docker run --rm -t eq:simple-torch .
-podman/docker run --rm -t eq:simple-jax .
+podman/docker run --rm -t eq:simple-torch
+podman/docker run --rm -t eq:simple-jax
 ```
