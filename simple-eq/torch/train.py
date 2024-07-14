@@ -13,15 +13,15 @@ test_data = datasets.MNIST(root="data", train=False, download=True, transform=tr
 
 
 # Define the CNN model
-class SimpleCNN(nn.Module):
+class EqCNN(nn.Module):
 
     def __init__(self):
-        super(SimpleCNN, self).__init__()
-        self.cl1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=3, padding=1)
-        self.max_1 = nn.MaxPool2d(kernel_size=2)
-        self.cl2 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1)
-        self.max_2 = nn.MaxPool2d(kernel_size=2)
-        self.cl3 = nn.Conv2d(in_channels=16, out_channels=16, kernel_size=7)
+        super(EqCNN, self).__init__()
+        self.cl1 = nn.Conv3d(in_channels=1, out_channels=8, kernel_size=(1, 3, 3))
+        self.max_1 = nn.MaxPool3d(kernel_size=(1, 2, 2))
+        self.cl2 = nn.Conv3d(in_channels=8, out_channels=16, kernel_size=(1, 3, 3))
+        self.max_2 = nn.MaxPool3d(kernel_size=(1, 2, 2))
+        self.cl3 = nn.Conv3d(in_channels=16, out_channels=16, kernel_size=(1, 5, 5))
         self.dense = nn.Linear(in_features=16, out_features=10)
 
     def forward(self, x: torch.Tensor):
@@ -30,39 +30,17 @@ class SimpleCNN(nn.Module):
         x_180 = torch.rot90(x, k=2, dims=(2, 3))
         x_270 = torch.rot90(x, k=3, dims=(2, 3))
 
-        x_0 = nn.functional.silu(self.cl1(x_0))
-        x_90 = nn.functional.silu(self.cl1(x_90))
-        x_180 = nn.functional.silu(self.cl1(x_180))
-        x_270 = nn.functional.silu(self.cl1(x_270))
+        x = torch.stack([x_0, x_90, x_180, x_270], dim=-3)
+        x = nn.functional.silu(self.cl1(x))
+        x = self.max_1(x)
 
-        x_0 = self.max_1(x_0)
-        x_90 = self.max_1(x_90)
-        x_180 = self.max_1(x_180)
-        x_270 = self.max_1(x_270)
+        x = nn.functional.silu(self.cl2(x))
+        x = self.max_2(x)
 
-        x_0 = nn.functional.silu(self.cl2(x_0))
-        x_90 = nn.functional.silu(self.cl2(x_90))
-        x_180 = nn.functional.silu(self.cl2(x_180))
-        x_270 = nn.functional.silu(self.cl2(x_270))
+        x = nn.functional.silu(self.cl3(x))
 
-        x_0 = self.max_2(x_0)
-        x_90 = self.max_2(x_90)
-        x_180 = self.max_2(x_180)
-        x_270 = self.max_2(x_270)
-
-        x_0 = nn.functional.silu(self.cl3(x_0))
-        x_90 = nn.functional.silu(self.cl3(x_90))
-        x_180 = nn.functional.silu(self.cl3(x_180))
-        x_270 = nn.functional.silu(self.cl3(x_270))
-
-        x_0 = x_0.view(len(x_0), -1)
-        x_90 = x_90.view(len(x_90), -1)
-        x_180 = x_180.view(len(x_180), -1)
-        x_270 = x_270.view(len(x_270), -1)
-
-        x_all = torch.stack([x_0, x_90, x_180, x_270], dim=-1)  # (batch, 16, 4)
-        x = torch.max(x_all, dim=-1).values
-
+        x = x.squeeze()
+        x = torch.max(x, dim=-1).values
         logits = self.dense(x)
         return logits
 
@@ -130,7 +108,7 @@ def test(dataloader, model):
 # Main function
 def main():
     # Create model, loss function and optimizer
-    model = SimpleCNN()
+    model = EqCNN()
 
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=0.0005)

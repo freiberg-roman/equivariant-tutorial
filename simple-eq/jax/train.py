@@ -16,34 +16,43 @@ training_data = datasets.MNIST(
 test_data = datasets.MNIST(root="data", train=False, download=True, transform=transform)
 
 
-class SimpleCNN(nn.Module):
+class EqCNN(nn.Module):
     def setup(self):
-        self.cl1 = nn.Conv(features=8, kernel_size=(3, 3), padding="SAME")
-        self.cl2 = nn.Conv(features=16, kernel_size=(3, 3), padding="SAME")
-        self.cl3 = nn.Conv(features=16, kernel_size=(7, 7), padding=0)
+        self.cl1 = nn.Conv(features=8, kernel_size=(1, 3, 3), padding=0)
+        self.cl2 = nn.Conv(features=16, kernel_size=(1, 3, 3), padding=0)
+        self.cl3 = nn.Conv(features=16, kernel_size=(1, 5, 5), padding=0)
         self.dense = nn.Dense(features=10)
 
     def __call__(self, x):
+        x_0 = x
+        x_90 = jnp.rot90(x, k=1, axes=(1, 2))
+        x_180 = jnp.rot90(x, k=2, axes=(1, 2))
+        x_270 = jnp.rot90(x, k=3, axes=(1, 2))
+
+        x = jnp.stack([x_0, x_90, x_180, x_270], axis=-4)
+        
         x = nn.silu(self.cl1(x))
-        x = nn.max_pool(x, (2, 2), strides=(2, 2))
+        x = nn.max_pool(x, (1, 2, 2), strides=(1, 2, 2))
+
         x = nn.silu(self.cl2(x))
-        x = nn.max_pool(x, (2, 2), strides=(2, 2))
+        x = nn.max_pool(x, (1, 2, 2), strides=(1, 2, 2))
+
         x = nn.silu(self.cl3(x))
-        x = x.reshape((x.shape[0], -1))  # Flatten
+
+        x = x.squeeze(axis=(2,3))  # Remove single dimensions
+        x = x.max(axis=-2)  # Pool across the rotation dimension
         logits = self.dense(x)
         return logits
 
 
 # Loss function
 def compute_loss(logits, labels):
-    return optax.softmax_cross_entropy_with_integer_labels(
-        logits=logits, labels=labels
-    ).mean()
+    return optax.softmax_cross_entropy_with_integer_labels(logits=logits, labels=labels).mean()
 
 
 # Create a TrainState
 def create_train_state(learning_rate, model, input_shape):
-    params = model.init(jax.random.key(0), jnp.ones(input_shape))["params"]
+    params = model.init(jax.random.PRNGKey(0), jnp.ones(input_shape))["params"]
     tx = optax.adamw(learning_rate)
     return train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
 
@@ -66,7 +75,7 @@ def train_step(state, batch):
 # Evaluation function
 @jax.jit
 def eval_step(params, batch):
-    logits = SimpleCNN().apply({"params": params}, batch[0])
+    logits = EqCNN().apply({"params": params}, batch[0])
     loss = compute_loss(logits, batch[1])
     accuracy = jnp.mean(jnp.argmax(logits, -1) == batch[1])  # type: ignore
     return loss, accuracy
@@ -101,7 +110,7 @@ def train_and_evaluate(state, train_loader, test_loader, num_epochs):
 
 
 def main():
-    model = SimpleCNN()
+    model = EqCNN()
 
     learning_rate = 0.0005
     num_epochs = 5
