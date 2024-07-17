@@ -93,7 +93,6 @@ def test(dataloader, model):
     loss_fn = nn.CrossEntropyLoss()
     with torch.no_grad():
         for X, y in dataloader:
-            X = torch.rot90(X, k=1, dims=(2, 3))
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
